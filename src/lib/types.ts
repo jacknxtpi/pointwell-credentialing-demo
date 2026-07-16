@@ -143,7 +143,10 @@ export type NetworkStatus = {
   status: NetworkStatusValue;
   confirmation_source: ConfirmationSource | null;
   effective_date: string | null;
-  last_verified_date: string | null;
+  recorded_at: string;
+  evidence_file_name: string | null;
+  evidence_file_path: string | null;
+  evidence_file_mime: string | null;
   notes: string | null;
 };
 

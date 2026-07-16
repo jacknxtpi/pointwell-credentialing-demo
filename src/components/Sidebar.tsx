@@ -39,7 +39,7 @@ export default function Sidebar({ user }: { user: SessionUser }) {
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex items-center px-5 py-6">
-        <Image src="/pointwell-logo.svg" alt="Pointwell" width={140} height={48} priority />
+        <Image src="/vetta-logo.svg" alt="Vetta" width={136} height={41} priority />
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3">

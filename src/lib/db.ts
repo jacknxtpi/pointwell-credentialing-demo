@@ -164,6 +164,9 @@ db.exec(`
     UNIQUE(line_of_business_id, name)
   );
 
+  -- Every network status entry requires uploaded proof (screenshot/portal export/email)
+  -- and gets a server-set recorded_at timestamp -- these aren't user-editable, so the
+  -- record reflects when the confirmation was actually captured, not a typed-in date.
   CREATE TABLE IF NOT EXISTS network_statuses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
@@ -171,7 +174,10 @@ db.exec(`
     status TEXT NOT NULL,
     confirmation_source TEXT,
     effective_date TEXT,
-    last_verified_date TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    evidence_file_name TEXT,
+    evidence_file_path TEXT,
+    evidence_file_mime TEXT,
     notes TEXT,
     UNIQUE(provider_id, plan_id)
   );

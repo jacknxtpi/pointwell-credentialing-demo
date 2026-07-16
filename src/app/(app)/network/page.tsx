@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { Payer, LineOfBusiness, Plan, Provider } from "@/lib/types";
 import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
@@ -11,7 +11,9 @@ type NetworkStatusRow = {
   status: "in_network" | "not_in_network";
   confirmation_source: string | null;
   effective_date: string | null;
-  last_verified_date: string | null;
+  recorded_at: string;
+  evidence_file_name: string | null;
+  evidence_file_path: string | null;
   notes: string | null;
   first_name: string;
   last_name: string;
@@ -65,6 +67,8 @@ export default function NetworkPage() {
         <p className="mt-2 max-w-2xl text-slate-600">
           Payer → line of business → plan. Populated gradually as network status is confirmed
           through approved contracts and directory research — not every plan will have data yet.
+          Every entry requires uploaded proof (screenshot, portal export, or email) and is
+          timestamped automatically when recorded.
         </p>
       </div>
 
@@ -266,6 +270,7 @@ function PlanSection({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
 
   async function setProviderStatus(e: React.FormEvent) {
     e.preventDefault();
@@ -273,19 +278,17 @@ function PlanSection({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/network-statuses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider_id: Number(providerId),
-          plan_id: plan.id,
-          status,
-          confirmation_source: confirmationSource || null,
-          effective_date: effectiveDate || null,
-          last_verified_date: new Date().toISOString().slice(0, 10),
-          notes: notes || null,
-        }),
-      });
+      const formData = new FormData();
+      formData.set("provider_id", providerId);
+      formData.set("plan_id", String(plan.id));
+      formData.set("status", status);
+      formData.set("confirmation_source", confirmationSource);
+      formData.set("effective_date", effectiveDate);
+      formData.set("notes", notes);
+      if (evidenceInputRef.current?.files?.[0]) {
+        formData.set("evidence_file", evidenceInputRef.current.files[0]);
+      }
+      const res = await fetch("/api/network-statuses", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Failed to save status.");
@@ -295,6 +298,7 @@ function PlanSection({
       setConfirmationSource("");
       setEffectiveDate("");
       setNotes("");
+      if (evidenceInputRef.current) evidenceInputRef.current.value = "";
       onChanged();
     } finally {
       setSaving(false);
@@ -313,7 +317,8 @@ function PlanSection({
               <th className="py-1 pr-3 font-medium">Status</th>
               <th className="py-1 pr-3 font-medium">Source</th>
               <th className="py-1 pr-3 font-medium">Effective</th>
-              <th className="py-1 font-medium">Last verified</th>
+              <th className="py-1 pr-3 font-medium">Recorded</th>
+              <th className="py-1 font-medium">Proof</th>
             </tr>
           </thead>
           <tbody>
@@ -331,7 +336,19 @@ function PlanSection({
                   {CONFIRMATION_SOURCES.find((c) => c.value === s.confirmation_source)?.label ?? "—"}
                 </td>
                 <td className="py-1 pr-3 text-slate-600">{s.effective_date ?? "—"}</td>
-                <td className="py-1 text-slate-600">{s.last_verified_date ?? "—"}</td>
+                <td className="py-1 pr-3 text-slate-600">{s.recorded_at.slice(0, 16).replace("T", " ")}</td>
+                <td className="py-1">
+                  {s.evidence_file_path ? (
+                    <a
+                      href={`/api/network-statuses/${s.id}/evidence`}
+                      className="text-brand-blue hover:underline"
+                    >
+                      {s.evidence_file_name ?? "file"}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -383,6 +400,13 @@ function PlanSection({
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes"
           className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        />
+        <input
+          ref={evidenceInputRef}
+          type="file"
+          required
+          title="Confirmation proof (screenshot, portal export, or email) — required"
+          className="max-w-[160px] text-xs"
         />
         <button
           type="submit"

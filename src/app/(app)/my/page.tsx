@@ -45,7 +45,7 @@ type NetworkStatusRow = {
   id: number;
   status: string;
   effective_date: string | null;
-  last_verified_date: string | null;
+  recorded_at: string;
   plan_name: string;
   line_of_business_name: string;
   payer_name: string;

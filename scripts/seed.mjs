@@ -156,7 +156,10 @@ db.exec(`
     status TEXT NOT NULL,
     confirmation_source TEXT,
     effective_date TEXT,
-    last_verified_date TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    evidence_file_name TEXT,
+    evidence_file_path TEXT,
+    evidence_file_mime TEXT,
     notes TEXT,
     UNIQUE(provider_id, plan_id)
   );
@@ -465,9 +468,19 @@ const getLobId = db.prepare("SELECT id FROM lines_of_business WHERE payer_id = ?
 const getPlanId = db.prepare("SELECT id FROM plans WHERE line_of_business_id = ? AND name = ?");
 const insertNetworkStatus = db.prepare(`
   INSERT OR IGNORE INTO network_statuses
-    (provider_id, plan_id, status, confirmation_source, effective_date, last_verified_date, notes)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+    (provider_id, plan_id, status, confirmation_source, effective_date, recorded_at,
+     evidence_file_name, evidence_file_path, evidence_file_mime, notes)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
+
+function seedNetworkEvidenceFile(providerId, planId, label) {
+  const storedName = `network_${providerId}_${planId}_seed.txt`;
+  fs.writeFileSync(
+    path.join(uploadsDir, storedName),
+    `Placeholder confirmation proof for ${label}. Not a real screenshot/document.`
+  );
+  return storedName;
+}
 
 insertLob.run(healthcareX, "Commercial");
 insertPlan.run(getLobId.get(healthcareX, "Commercial").id, "HX Gold PPO");
@@ -490,7 +503,10 @@ insertNetworkStatus.run(
   "in_network",
   "payer_portal",
   "2026-06-20",
-  "2026-07-10",
+  "2026-07-10 09:00:00",
+  "healthcare-x-portal-screenshot.txt",
+  seedNetworkEvidenceFile(mark, hxGoldPpo, "Mark Douglas / Healthcare X Gold PPO"),
+  "text/plain",
   "Confirmed via Healthcare X provider portal after approval."
 );
 insertNetworkStatus.run(
@@ -499,7 +515,10 @@ insertNetworkStatus.run(
   "not_in_network",
   "email",
   null,
-  "2026-04-25",
+  "2026-04-25 10:00:00",
+  "sd-medicaid-denial-email.txt",
+  seedNetworkEvidenceFile(priya, sdMedicaidMco, "Priya Anand / SD Medicaid MCO"),
+  "text/plain",
   "Application denied; not listed in SD Medicaid MCO directory."
 );
 

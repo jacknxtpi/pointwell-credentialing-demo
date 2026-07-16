@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pointwell Credentialing",
+  title: "Vetta Credentialing",
   description: "Provider credentialing demo",
 };
 

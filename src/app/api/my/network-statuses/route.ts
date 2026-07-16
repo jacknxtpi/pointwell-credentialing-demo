@@ -10,7 +10,7 @@ export async function GET() {
 
   const rows = db
     .prepare(
-      `SELECT ns.id, ns.status, ns.effective_date, ns.last_verified_date,
+      `SELECT ns.id, ns.status, ns.effective_date, ns.recorded_at,
               pl.name AS plan_name, lob.name AS line_of_business_name, pay.name AS payer_name
        FROM network_statuses ns
        JOIN plans pl ON pl.id = ns.plan_id
