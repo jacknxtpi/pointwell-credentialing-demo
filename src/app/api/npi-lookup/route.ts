@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lookupNpi } from "@/lib/npi";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const user = await requireAdmin();
+  if (!user) {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
   const npi = req.nextUrl.searchParams.get("npi")?.trim();
   if (!npi || !/^\d{10}$/.test(npi)) {
     return NextResponse.json({ error: "Provide a valid 10-digit NPI." }, { status: 400 });

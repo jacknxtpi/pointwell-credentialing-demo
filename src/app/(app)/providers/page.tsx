@@ -3,17 +3,22 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Provider } from "@/lib/types";
+import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
 export default function ProvidersPage() {
+  const allowed = useRequireAdmin();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!allowed) return;
     fetch("/api/providers")
       .then((r) => r.json())
       .then((data) => setProviders(data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [allowed]);
+
+  if (!allowed) return null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,8 +43,8 @@ export default function ProvidersPage() {
               <tr>
                 <th className="px-4 py-2 font-medium">Name</th>
                 <th className="px-4 py-2 font-medium">NPI</th>
-                <th className="px-4 py-2 font-medium">Provider type</th>
-                <th className="px-4 py-2 font-medium">Practice address</th>
+                <th className="px-4 py-2 font-medium">Specialty</th>
+                <th className="px-4 py-2 font-medium">Primary service location</th>
               </tr>
             </thead>
             <tbody>
@@ -54,8 +59,8 @@ export default function ProvidersPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-slate-600">{p.npi}</td>
-                  <td className="px-4 py-2 text-slate-600">{p.provider_type ?? "—"}</td>
-                  <td className="px-4 py-2 text-slate-600">{p.primary_practice_address ?? "—"}</td>
+                  <td className="px-4 py-2 text-slate-600">{p.specialties || p.nppes_specialty || "—"}</td>
+                  <td className="px-4 py-2 text-slate-600">{p.primary_service_location ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 import { Payer } from "@/lib/types";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET() {
+  const user = await requireAdmin();
+  if (!user) {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
   const rows = db.prepare("SELECT * FROM payers ORDER BY name").all() as Payer[];
   return NextResponse.json(rows);
 }
 
 export async function POST(req: NextRequest) {
+  const user = await requireAdmin();
+  if (!user) {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
   const body = await req.json();
   if (!body.name) {
     return NextResponse.json({ error: "name is required." }, { status: 400 });

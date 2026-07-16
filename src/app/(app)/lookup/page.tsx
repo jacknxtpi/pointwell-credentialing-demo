@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Provider, Payer } from "@/lib/types";
+import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
 type SubmissionRow = {
   id: number;
@@ -23,6 +24,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function LookupPage() {
+  const allowed = useRequireAdmin();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [payers, setPayers] = useState<Payer[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -30,6 +32,7 @@ export default function LookupPage() {
   const [payerId, setPayerId] = useState("");
 
   useEffect(() => {
+    if (!allowed) return;
     Promise.all([
       fetch("/api/providers").then((r) => r.json()),
       fetch("/api/payers").then((r) => r.json()),
@@ -39,7 +42,7 @@ export default function LookupPage() {
       setPayers(pay);
       setSubmissions(subs);
     });
-  }, []);
+  }, [allowed]);
 
   const match = useMemo(
     () =>
@@ -82,6 +85,8 @@ export default function LookupPage() {
   }
 
   const result = answer();
+
+  if (!allowed) return null;
 
   return (
     <div className="flex flex-col gap-8">
