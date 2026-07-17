@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DISCLOSURE_QUESTIONS } from "@/lib/disclosureQuestions";
 import { useRequireProvider } from "@/lib/useRequireAdmin";
+import {
+  DOCUMENT_TYPES,
+  getExpirationState,
+  EXPIRATION_STYLES,
+  EXPIRATION_LABELS,
+} from "@/lib/documentTypes";
+import type { ProviderDocument } from "@/lib/types";
 
 type MyProvider = {
   id: number;
@@ -112,9 +119,16 @@ export default function MyProfilePage() {
   const [disclosures, setDisclosures] = useState<Record<string, { answer: string; explanation: string }>>({});
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [networkStatuses, setNetworkStatuses] = useState<NetworkStatusRow[]>([]);
+  const [documents, setDocuments] = useState<ProviderDocument[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function refreshDocuments() {
+    fetch("/api/my/documents")
+      .then((r) => r.json())
+      .then(setDocuments);
+  }
 
   useEffect(() => {
     if (!allowed) return;
@@ -122,7 +136,8 @@ export default function MyProfilePage() {
       fetch("/api/my/provider").then((r) => r.json()),
       fetch("/api/my/submissions").then((r) => r.json()),
       fetch("/api/my/network-statuses").then((r) => r.json()),
-    ]).then(([p, subs, statuses]) => {
+      fetch("/api/my/documents").then((r) => r.json()),
+    ]).then(([p, subs, statuses, docs]) => {
       setProvider(p);
       const initialForm: Record<string, string> = {};
       for (const f of EDITABLE_FIELDS) initialForm[f.key] = (p[f.key] as string) ?? "";
@@ -149,6 +164,7 @@ export default function MyProfilePage() {
       setDisclosures(disclosureMap);
       setSubmissions(subs);
       setNetworkStatuses(statuses);
+      setDocuments(docs);
     });
   }, [allowed]);
 
@@ -274,6 +290,23 @@ export default function MyProfilePage() {
         {submissions.length === 0 && networkStatuses.length === 0 && (
           <p className="mt-2 text-sm text-slate-400">Nothing on file yet.</p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="font-medium text-brand-navy">My documents</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Upload the required documents yourself, or mark one as already on file with CAQH.
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          {DOCUMENT_TYPES.map((docType) => (
+            <MyDocumentRow
+              key={docType.key}
+              docType={docType}
+              document={documents.find((d) => d.document_type === docType.key)}
+              onSaved={refreshDocuments}
+            />
+          ))}
+        </div>
       </section>
 
       <form onSubmit={handleSave} className="flex flex-col gap-6">
@@ -447,6 +480,107 @@ export default function MyProfilePage() {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function MyDocumentRow({
+  docType,
+  document,
+  onSaved,
+}: {
+  docType: { key: string; label: string };
+  document: ProviderDocument | undefined;
+  onSaved: () => void;
+}) {
+  const [status, setStatus] = useState<"on_file" | "on_caqh">(document?.status ?? "on_file");
+  const [issuedDate, setIssuedDate] = useState(document?.issued_date ?? "");
+  const [expiresDate, setExpiresDate] = useState(document?.expires_date ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const expirationState = getExpirationState(document?.status, document?.expires_date);
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.set("document_type", docType.key);
+      formData.set("status", status);
+      formData.set("issued_date", issuedDate);
+      formData.set("expires_date", expiresDate);
+      if (status === "on_file" && fileInputRef.current?.files?.[0]) {
+        formData.set("file", fileInputRef.current.files[0]);
+      }
+      const res = await fetch("/api/my/documents", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to save document.");
+        return;
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-700">{docType.label}</p>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${EXPIRATION_STYLES[expirationState]}`}>
+          {EXPIRATION_LABELS[expirationState]}
+        </span>
+      </div>
+
+      {document?.status === "on_file" && document.file_path && (
+        <p className="mt-1 text-xs text-slate-600">
+          <a href={`/api/documents/${document.id}/file`} className="text-brand-blue hover:underline">
+            {document.file_name}
+          </a>
+          {document.uploaded_at && ` · uploaded ${document.uploaded_at.slice(0, 10)}`}
+        </p>
+      )}
+
+      <form onSubmit={handleUpload} className="mt-2 flex flex-wrap items-end gap-2">
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value as "on_file" | "on_caqh")}
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        >
+          <option value="on_file">Upload file</option>
+          <option value="on_caqh">On CAQH (no upload)</option>
+        </select>
+        {status === "on_file" && (
+          <input ref={fileInputRef} type="file" className="max-w-[180px] text-xs" />
+        )}
+        <input
+          type="date"
+          value={issuedDate}
+          onChange={(e) => setIssuedDate(e.target.value)}
+          title="Issued date"
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        />
+        <input
+          type="date"
+          value={expiresDate}
+          onChange={(e) => setExpiresDate(e.target.value)}
+          title="Expires date"
+          className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+        />
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-md bg-brand-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-blue-dark disabled:opacity-40"
+        >
+          {document ? "Update" : "Save"}
+        </button>
+      </form>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

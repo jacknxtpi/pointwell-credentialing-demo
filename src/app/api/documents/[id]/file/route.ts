@@ -3,15 +3,15 @@ import fs from "fs";
 import path from "path";
 import db, { uploadsDir } from "@/lib/db";
 import { ProviderDocument } from "@/lib/types";
-import { requireAdmin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await requireAdmin();
+  const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+    return NextResponse.json({ error: "Access required." }, { status: 403 });
   }
   const { id } = await params;
   const doc = db
@@ -20,6 +20,10 @@ export async function GET(
 
   if (!doc || !doc.file_path) {
     return NextResponse.json({ error: "No file on record." }, { status: 404 });
+  }
+
+  if (user.role !== "admin" && doc.provider_id !== user.provider_id) {
+    return NextResponse.json({ error: "Access required." }, { status: 403 });
   }
 
   const fullPath = path.join(uploadsDir, doc.file_path);

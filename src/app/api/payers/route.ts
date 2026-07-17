@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
     const created = db.prepare("SELECT * FROM payers WHERE id = ?").get(info.lastInsertRowid);
     return NextResponse.json(created, { status: 201 });
   } catch (err) {
+    if (err instanceof Error && err.message.includes("UNIQUE constraint failed")) {
+      return NextResponse.json({ error: "A payer with that name already exists." }, { status: 409 });
+    }
     const message = err instanceof Error ? err.message : "Failed to create payer.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

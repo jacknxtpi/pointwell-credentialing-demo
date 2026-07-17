@@ -5,11 +5,21 @@ import type { Payer, PayerFieldLabel } from "@/lib/types";
 import { PACKET_FIELDS } from "@/lib/packetFields";
 import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
+const PAYER_TYPES = [
+  { value: "commercial", label: "Commercial" },
+  { value: "medicare", label: "Medicare" },
+  { value: "medicaid", label: "Medicaid" },
+];
+
 export default function PayersPage() {
   const allowed = useRequireAdmin();
   const [payers, setPayers] = useState<Payer[]>([]);
   const [labels, setLabels] = useState<PayerFieldLabel[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState("commercial");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
@@ -21,6 +31,30 @@ export default function PayersPage() {
       setLabels(l);
     });
   }, [allowed]);
+
+  async function addPayer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await fetch("/api/payers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim(), payer_type: newType }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAddError(data.error ?? "Failed to add payer.");
+        return;
+      }
+      setPayers((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewName("");
+      setNewType("commercial");
+    } finally {
+      setAdding(false);
+    }
+  }
 
   async function saveField(payerId: number, fieldKey: string, label: string, included: boolean) {
     const res = await fetch("/api/payer-field-labels", {
@@ -50,6 +84,43 @@ export default function PayersPage() {
         </p>
       </div>
 
+      <form
+        onSubmit={addPayer}
+        className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-4"
+      >
+        <div>
+          <label className="block text-xs font-medium text-slate-700">Payer name</label>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Avera Health Plans"
+            className="mt-1 w-64 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-700">Type</label>
+          <select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+            className="mt-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            {PAYER_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          disabled={adding || !newName.trim()}
+          className="rounded-md bg-brand-blue px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-blue-dark disabled:opacity-40"
+        >
+          + Add payer
+        </button>
+        {addError && <p className="w-full text-sm text-red-600">{addError}</p>}
+      </form>
+
       <div className="flex flex-col gap-3">
         {payers.map((payer) => (
           <div key={payer.id} className="rounded-xl border border-slate-200 bg-white">
@@ -57,7 +128,12 @@ export default function PayersPage() {
               onClick={() => setExpanded(expanded === payer.id ? null : payer.id)}
               className="flex w-full items-center justify-between px-5 py-4 text-left"
             >
-              <span className="font-medium text-brand-navy">{payer.name}</span>
+              <span className="flex items-center gap-2 font-medium text-brand-navy">
+                {payer.name}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-600">
+                  {payer.payer_type}
+                </span>
+              </span>
               <span className="text-xs text-slate-500">
                 {expanded === payer.id ? "Hide field labels ▲" : "Edit field labels ▼"}
               </span>
