@@ -63,3 +63,62 @@ export const PACKET_FIELDS: PacketField[] = [
   field("hospital_address", "Hospital address"),
   field("hospital_phone", "Hospital phone"),
 ];
+
+// Sections some payer applications ask for that we don't collect anywhere yet.
+// Broken out to the same sub-field granularity as the source form (rather than
+// one summary line per section) so the generated packet shows exactly which
+// questions are unanswered. Included only for payers whose form actually asks
+// for them.
+const gap = (key: string, label: string): PacketField => ({ key, label, getValue: () => null });
+
+export const GAP_FIELDS: PacketField[] = [
+  // Medical/Graduate/Professional Education
+  gap("gap_edu_level", "Education level (undergraduate/masters/PhD/medical/dental/other)"),
+  gap("gap_edu_institution", "Education — institution name"),
+  gap("gap_edu_dates", "Education — attendance dates (from/to)"),
+  gap("gap_edu_degree", "Education — degree received"),
+  gap("gap_edu_area_of_study", "Education — area of study"),
+  gap("gap_edu_address", "Education — institution address"),
+  gap("gap_edu_phone", "Education — institution phone number"),
+  gap("gap_edu_email", "Education — institution e-mail address"),
+  gap("gap_edu_ecfmg", "ECFMG number (if applicable)"),
+
+  // Internship/Residency/Fellowship Training
+  gap("gap_training_institution", "Training — institution name"),
+  gap("gap_training_program_type", "Training — type of program/specialty"),
+  gap("gap_training_dates", "Training — dates (from/to)"),
+  gap("gap_training_completed", "Training — completed? (yes/no)"),
+  gap("gap_training_program_director", "Training — program director"),
+  gap("gap_training_address", "Training — institution address"),
+  gap("gap_training_phone", "Training — institution phone number"),
+
+  // Chronological Employment/Practice History
+  gap("gap_employment_organization", "Employment history — organization name"),
+  gap("gap_employment_title", "Employment history — title/position"),
+  gap("gap_employment_dates", "Employment history — dates (from/to)"),
+  gap("gap_employment_reason_leaving", "Employment history — reason for leaving"),
+  gap("gap_employment_still_open", "Employment history — clinic still open? (yes/no)"),
+  gap("gap_employment_contact", "Employment history — verification contact"),
+  gap("gap_employment_address", "Employment history — employer address"),
+
+  // Licensure detail beyond number/state
+  gap("gap_license_type", "License type"),
+  gap("gap_license_date_issued", "License date issued"),
+  gap("gap_license_expiration", "License expiration date"),
+  gap("gap_license_status", "License status (active/inactive/pending)"),
+
+  // Billing Information
+  gap("gap_billing_name", "Billing name"),
+  gap("gap_billing_contact_person", "Billing contact person"),
+  gap("gap_billing_address", "Billing address"),
+  gap("gap_billing_phone", "Billing office phone number"),
+  gap("gap_billing_fax", "Billing fax number"),
+  gap("gap_billing_email", "Billing e-mail address"),
+
+  // Life Support Certification
+  gap("gap_life_support_has_certs", "Current life support certifications? (yes/no)"),
+  gap("gap_life_support_types", "Life support certification type(s) (BLS/ACLS/ATLS/PALS/NRP, etc.)"),
+  gap("gap_life_support_expiration", "Life support certification expiration date(s)"),
+];
+
+PACKET_FIELDS.push(...GAP_FIELDS);

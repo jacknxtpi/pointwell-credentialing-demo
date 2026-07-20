@@ -218,6 +218,7 @@ const payers = [
   ["Medicare", "medicare"],
   ["State Medicaid", "medicaid"],
   ["Blue Shield Regional", "commercial"],
+  ["Medica Health Plans", "commercial"],
 ];
 
 const insertPayer = db.prepare("INSERT OR IGNORE INTO payers (name, payer_type) VALUES (?, ?)");
@@ -588,6 +589,120 @@ insertFieldLabel.run(healthcareX, "personal_phone", "Contact Phone", 1);
 insertFieldLabel.run(healthcareX, "railroad_medicare_number", "", 0);
 insertFieldLabel.run(medicaid, "npi", "National Provider Identifier", 1);
 insertFieldLabel.run(medicaid, "medicaid_number", "SD Medicaid Provider #", 1);
+
+// Medica Health Plans mirrors the real MN Uniform Credentialing Application the
+// client has used with providers, relabeled to match its exact field wording.
+// The "gap_*" fields represent sections that form asks for (education, training,
+// employment history, license status, billing, life support certs) that we don't
+// collect anywhere yet — included here so the generated packet shows the gap
+// explicitly, and excluded from every other payer so their packets are unaffected.
+const medica = getPayerId.get("Medica Health Plans").id;
+
+const MEDICA_RELABELED_FIELDS = {
+  npi: "NPI",
+  first_name: "First Name",
+  middle_name: "Middle",
+  last_name: "Last",
+  other_names: "All Former Aliases",
+  titles: "Title",
+  degrees: "Degree(s) Received",
+  credential: "Suffix",
+  dob: "Date of Birth",
+  city_of_birth: "Birthplace City",
+  ssn: "Social Security Number",
+  home_address: "Current Home Address",
+  personal_email: "E-mail Address",
+  personal_phone: "Cell Phone Number",
+  primary_service_location: "Primary Practice Location/Clinic Name",
+  first_day_date: "Start Date (at this location)",
+  specialties: "Primary Specialty in which Care will be Provided",
+  nppes_practice_address: "Primary Practice Location Address",
+  nppes_practice_phone: "Office Phone Number (Primary Practice)",
+  gender_for_directories: "Gender",
+  ethnicity_for_directories: "Ethnicity (select all that apply)",
+  caqh_profile_number: "CAQH ID",
+  license_number: "License Number",
+  license_state: "License State",
+  dea_number: "DEA Number",
+  board_certification_number: "Certificate Number (Primary Specialty)",
+  controlled_substance_number: "State Controlled Substance Certification/Registration Number",
+  liability_ins_start: "Coverage Start Date (Current Policy)",
+  liability_ins_end: "Coverage Expiration Date (Current Policy)",
+  hospital_admitting_type: "Type/Category of Privilege or Affiliation",
+  hospital_name: "Primary Hospital Affiliation – Facility Name",
+  hospital_address: "Primary Hospital Affiliation – Facility Address",
+  hospital_phone: "Primary Hospital Affiliation – Phone Number",
+};
+
+const MEDICA_EXCLUDED_FIELDS = [
+  "nppes_specialty",
+  "pcp_note",
+  "age_range_treated",
+  "opioid_treatment",
+  "special_populations",
+  "caqh_username",
+  "medicare_ptan_number",
+  "medicare_ptan_issued",
+  "medicare_ptan_expires",
+  "medicaid_number",
+  "medicaid_issued",
+  "medicaid_expires",
+  "railroad_medicare_number",
+];
+
+const MEDICA_GAP_FIELDS = {
+  gap_edu_level: "Education Level (Undergraduate/Masters/PhD/Medical/Dental/Other)",
+  gap_edu_institution: "Institution Name",
+  gap_edu_dates: "Attendance Dates (From/To)",
+  gap_edu_degree: "Degree Received",
+  gap_edu_area_of_study: "Area of Study",
+  gap_edu_address: "Institution Address",
+  gap_edu_phone: "Institution Phone Number",
+  gap_edu_email: "Institution E-mail Address",
+  gap_edu_ecfmg: "ECFMG Number (if applicable)",
+  gap_training_institution: "Training Institution Name",
+  gap_training_program_type: "Type of Program/Specialty",
+  gap_training_dates: "Training Dates (From/To)",
+  gap_training_completed: "Completed Training? (Yes/No)",
+  gap_training_program_director: "Program Director",
+  gap_training_address: "Training Institution Address",
+  gap_training_phone: "Training Institution Phone Number",
+  gap_employment_organization: "Organization Name",
+  gap_employment_title: "Title/Position",
+  gap_employment_dates: "Employment Dates (From/To)",
+  gap_employment_reason_leaving: "Reason for Leaving",
+  gap_employment_still_open: "Clinic Still Open? (Yes/No)",
+  gap_employment_contact: "Employment Verification Contact",
+  gap_employment_address: "Employer Address",
+  gap_license_type: "License Type",
+  gap_license_date_issued: "License Date Issued",
+  gap_license_expiration: "License Expiration Date",
+  gap_license_status: "License Status (Active/Inactive/Pending)",
+  gap_billing_name: "Billing Name",
+  gap_billing_contact_person: "Billing Contact Person",
+  gap_billing_address: "Billing Address",
+  gap_billing_phone: "Billing Office Phone Number",
+  gap_billing_fax: "Billing Fax Number",
+  gap_billing_email: "Billing E-mail Address",
+  gap_life_support_has_certs: "Current Life Support Certifications? (Yes/No)",
+  gap_life_support_types: "Type(s) of Certification (BLS/ACLS/ATLS/PALS/NRP, etc.)",
+  gap_life_support_expiration: "Certification Expiration Date(s)",
+};
+
+for (const [key, label] of Object.entries(MEDICA_RELABELED_FIELDS)) {
+  insertFieldLabel.run(medica, key, label, 1);
+}
+for (const key of MEDICA_EXCLUDED_FIELDS) {
+  insertFieldLabel.run(medica, key, "", 0);
+}
+for (const [key, label] of Object.entries(MEDICA_GAP_FIELDS)) {
+  insertFieldLabel.run(medica, key, label, 1);
+}
+for (const otherPayer of [healthcareX, medicare, medicaid, blueShield]) {
+  for (const key of Object.keys(MEDICA_GAP_FIELDS)) {
+    insertFieldLabel.run(otherPayer, key, "", 0);
+  }
+}
 
 const insertUser = db.prepare(`
   INSERT OR IGNORE INTO users (email, password_hash, role, provider_id)
