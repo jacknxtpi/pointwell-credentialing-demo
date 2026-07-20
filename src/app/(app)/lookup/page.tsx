@@ -66,7 +66,7 @@ export default function LookupPage() {
     if (match.status === "approved") {
       return {
         style: STATUS_STYLES.approved,
-        text: `Yes — approved / in-network with ${selectedPayer.name}, effective ${match.effective_date}.`,
+        text: `Yes — approved and credentialed with ${selectedPayer.name}, effective ${match.effective_date}.`,
       };
     }
     if (match.status === "denied") {
@@ -92,10 +92,10 @@ export default function LookupPage() {
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-brand-navy">
-          Provider Status Lookup
+          Provider Credential Status
         </h1>
         <p className="mt-2 text-slate-600">
-          &ldquo;Is Dr. X an approved / in-network provider under Payer Y?&rdquo;
+          &ldquo;Is Dr. X an approved, credentialed provider under Payer Y?&rdquo;
         </p>
       </div>
 

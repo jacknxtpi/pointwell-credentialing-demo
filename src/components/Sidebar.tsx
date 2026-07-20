@@ -9,7 +9,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/providers", label: "Providers" },
   { href: "/providers/new", label: "Add Provider" },
-  { href: "/lookup", label: "Status Lookup" },
+  { href: "/lookup", label: "Credential Status" },
   { href: "/network", label: "Network Status" },
   { href: "/documents", label: "Document Expirations" },
   { href: "/payers", label: "Payers" },
