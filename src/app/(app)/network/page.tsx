@@ -131,6 +131,9 @@ function PayerCard({
     }
   }
 
+  const payerLobIds = linesOfBusiness.map((l) => l.id);
+  const payerPlanCount = plans.filter((p) => payerLobIds.includes(p.line_of_business_id)).length;
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex items-center justify-between">
@@ -139,6 +142,13 @@ function PayerCard({
           {payer.payer_type}
         </span>
       </div>
+
+      <BulkApplyForm
+        payerId={payer.id}
+        providers={providers}
+        planCount={payerPlanCount}
+        onChanged={onChanged}
+      />
 
       <div className="mt-3 flex flex-col gap-3 border-l-2 border-slate-100 pl-4">
         {linesOfBusiness.length === 0 && (
@@ -173,6 +183,143 @@ function PayerCard({
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
     </section>
+  );
+}
+
+function BulkApplyForm({
+  payerId,
+  providers,
+  planCount,
+  onChanged,
+}: {
+  payerId: number;
+  providers: Provider[];
+  planCount: number;
+  onChanged: () => void;
+}) {
+  const [providerId, setProviderId] = useState("");
+  const [status, setStatus] = useState<"in_network" | "not_in_network">("in_network");
+  const [confirmationSource, setConfirmationSource] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const evidenceInputRef = useRef<HTMLInputElement>(null);
+
+  async function applyToAll(e: React.FormEvent) {
+    e.preventDefault();
+    if (!providerId) return;
+    setSaving(true);
+    setError(null);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.set("provider_id", providerId);
+      formData.set("payer_id", String(payerId));
+      formData.set("status", status);
+      formData.set("confirmation_source", confirmationSource);
+      formData.set("effective_date", effectiveDate);
+      formData.set("notes", notes);
+      if (evidenceInputRef.current?.files?.[0]) {
+        formData.set("evidence_file", evidenceInputRef.current.files[0]);
+      }
+      const res = await fetch("/api/network-statuses/bulk", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Failed to bulk update status.");
+        return;
+      }
+      setResult(
+        `Updated ${data.updated} plan${data.updated === 1 ? "" : "s"} to ${
+          status === "in_network" ? "in-network" : "not in-network"
+        }.`
+      );
+      setProviderId("");
+      setConfirmationSource("");
+      setEffectiveDate("");
+      setNotes("");
+      if (evidenceInputRef.current) evidenceInputRef.current.value = "";
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-brand-blue-light bg-brand-blue-light/40 p-3">
+      <p className="text-xs font-medium text-brand-navy">
+        Bulk update — mark a provider&rsquo;s status across all {planCount} current plan
+        {planCount === 1 ? "" : "s"} for this payer at once
+      </p>
+      {planCount === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">Add at least one line of business/plan first.</p>
+      ) : (
+        <form onSubmit={applyToAll} className="mt-2 flex flex-wrap items-end gap-2">
+          <select
+            value={providerId}
+            onChange={(e) => setProviderId(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="">Provider…</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.first_name} {p.last_name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as "in_network" | "not_in_network")}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="in_network">In-network</option>
+            <option value="not_in_network">Not in-network</option>
+          </select>
+          <select
+            value={confirmationSource}
+            onChange={(e) => setConfirmationSource(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          >
+            <option value="">Confirmed via…</option>
+            {CONFIRMATION_SOURCES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={effectiveDate}
+            onChange={(e) => setEffectiveDate(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+            title="Effective date"
+          />
+          <input
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes (e.g. reason for a delay)"
+            className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          />
+          <input
+            ref={evidenceInputRef}
+            type="file"
+            required
+            title="Confirmation proof (screenshot, portal export, or email) — required"
+            className="max-w-[160px] text-xs"
+          />
+          <button
+            type="submit"
+            disabled={saving || !providerId}
+            className="rounded-md bg-brand-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-blue-dark disabled:opacity-40"
+          >
+            Apply to all {planCount} plan{planCount === 1 ? "" : "s"}
+          </button>
+        </form>
+      )}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {result && <p className="mt-1 text-xs text-brand-teal">{result}</p>}
+    </div>
   );
 }
 
@@ -318,7 +465,8 @@ function PlanSection({
               <th className="py-1 pr-3 font-medium">Source</th>
               <th className="py-1 pr-3 font-medium">Effective</th>
               <th className="py-1 pr-3 font-medium">Recorded</th>
-              <th className="py-1 font-medium">Proof</th>
+              <th className="py-1 pr-3 font-medium">Proof</th>
+              <th className="py-1 font-medium">Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -337,7 +485,7 @@ function PlanSection({
                 </td>
                 <td className="py-1 pr-3 text-slate-600">{s.effective_date ?? "—"}</td>
                 <td className="py-1 pr-3 text-slate-600">{s.recorded_at.slice(0, 16).replace("T", " ")}</td>
-                <td className="py-1">
+                <td className="py-1 pr-3">
                   {s.evidence_file_path ? (
                     <a
                       href={`/api/network-statuses/${s.id}/evidence`}
@@ -348,6 +496,9 @@ function PlanSection({
                   ) : (
                     "—"
                   )}
+                </td>
+                <td className="py-1 max-w-[200px] text-slate-600" title={s.notes ?? undefined}>
+                  {s.notes || "—"}
                 </td>
               </tr>
             ))}
@@ -398,8 +549,8 @@ function PlanSection({
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes"
-          className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          placeholder="Notes (e.g. reason for a delay)"
+          className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
         />
         <input
           ref={evidenceInputRef}

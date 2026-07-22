@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Provider, Payer, PracticeLocation, Reference, Disclosure, ProviderDocument } from "@/lib/types";
 import { DISCLOSURE_QUESTIONS } from "@/lib/disclosureQuestions";
 import { DOCUMENT_TYPES, getExpirationState, EXPIRATION_STYLES, EXPIRATION_LABELS } from "@/lib/documentTypes";
+import { getRecredentialingState, RECRED_STYLES, RECRED_LABELS } from "@/lib/recredentialing";
 import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
 type ProviderDetail = Provider & {
@@ -30,6 +31,15 @@ type SubmissionRow = {
   payer_type: string;
 };
 
+type CustomFieldValueRow = {
+  custom_field_id: number;
+  field_key: string;
+  label: string;
+  payer_id: number;
+  payer_name: string;
+  value: string | null;
+};
+
 const STATUS_STYLES: Record<string, string> = {
   submitted: "bg-brand-blue-light text-brand-blue",
   pending: "bg-amber-100 text-amber-800",
@@ -47,18 +57,22 @@ export default function ProviderDetailPage() {
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [payers, setPayers] = useState<Payer[]>([]);
   const [documents, setDocuments] = useState<ProviderDocument[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldValueRow[]>([]);
+  const [activeCustomFieldPayerId, setActiveCustomFieldPayerId] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    const [providerRes, subsRes, payersRes, docsRes] = await Promise.all([
+    const [providerRes, subsRes, payersRes, docsRes, customFieldsRes] = await Promise.all([
       fetch(`/api/providers/${providerId}`),
       fetch(`/api/submissions?provider_id=${providerId}`),
       fetch("/api/payers"),
       fetch(`/api/documents?provider_id=${providerId}`),
+      fetch(`/api/providers/${providerId}/custom-fields`),
     ]);
     setProvider(await providerRes.json());
     setSubmissions(await subsRes.json());
     setPayers(await payersRes.json());
     setDocuments(await docsRes.json());
+    setCustomFields(await customFieldsRes.json());
   }, [providerId]);
 
   useEffect(() => {
@@ -173,6 +187,48 @@ export default function ProviderDetailPage() {
           ))}
         </div>
       </section>
+
+      {customFields.length > 0 && (() => {
+        const payerGroups = Array.from(
+          new Map(customFields.map((f) => [f.payer_id, f.payer_name])).entries()
+        );
+        const activePayerId = payerGroups.some(([id]) => id === activeCustomFieldPayerId)
+          ? activeCustomFieldPayerId
+          : payerGroups[0][0];
+        const visibleFields = customFields.filter((f) => f.payer_id === activePayerId);
+        return (
+          <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="font-medium text-brand-navy">Custom fields</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Payer-specific questions added from the Payers page that aren&rsquo;t part of the
+              standard intake form.
+            </p>
+            {payerGroups.length > 1 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {payerGroups.map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setActiveCustomFieldPayerId(id)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      id === activePayerId
+                        ? "border-brand-blue bg-brand-blue-light text-brand-blue"
+                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {visibleFields.map((f) => (
+                <CustomFieldInput key={f.custom_field_id} field={f} providerId={providerId} onSaved={refresh} />
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {(provider.hospital_admitting_type || provider.hospital_name) && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -309,6 +365,7 @@ function SubmissionCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
+  const recredState = getRecredentialingState(submission.status, submission.approved_through);
 
   async function saveStatus(e: React.FormEvent) {
     e.preventDefault();
@@ -342,9 +399,16 @@ function SubmissionCard({
     <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium text-slate-700">{submission.payer_name}</p>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[submission.status] ?? ""}`}>
-          {submission.status}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {submission.status === "approved" && recredState !== "current" && (
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${RECRED_STYLES[recredState]}`}>
+              {RECRED_LABELS[recredState]}
+            </span>
+          )}
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[submission.status] ?? ""}`}>
+            {submission.status}
+          </span>
+        </div>
       </div>
       <p className="mt-1 text-xs text-slate-500">
         Submitted {submission.submitted_at.slice(0, 10)}
@@ -361,6 +425,9 @@ function SubmissionCard({
           </>
         )}
       </p>
+      {submission.notes && (
+        <p className="mt-1 text-xs italic text-slate-600">&ldquo;{submission.notes}&rdquo;</p>
+      )}
 
       <form onSubmit={saveStatus} className="mt-2 flex flex-wrap items-end gap-2">
         <select
@@ -393,8 +460,8 @@ function SubmissionCard({
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes"
-          className="w-40 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          placeholder="Notes (e.g. reason for a delay)"
+          className="w-56 rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
         />
         <button
           type="submit"
@@ -404,6 +471,55 @@ function SubmissionCard({
           Update status
         </button>
       </form>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function CustomFieldInput({
+  field,
+  providerId,
+  onSaved,
+}: {
+  field: CustomFieldValueRow;
+  providerId: string;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState(field.value ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (value === (field.value ?? "")) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/providers/${providerId}/custom-fields`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: { [field.custom_field_id]: value } }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Failed to save.");
+        return;
+      }
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700">{field.label}</label>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        disabled={saving}
+        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue"
+      />
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );

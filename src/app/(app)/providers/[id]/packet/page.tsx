@@ -7,6 +7,15 @@ import type { Provider, Payer, PayerFieldLabel } from "@/lib/types";
 import { PACKET_FIELDS } from "@/lib/packetFields";
 import { useRequireAdmin } from "@/lib/useRequireAdmin";
 
+type CustomFieldValueRow = {
+  custom_field_id: number;
+  field_key: string;
+  label: string;
+  payer_id: number;
+  sort_order: number | null;
+  value: string | null;
+};
+
 export default function PacketPage() {
   const allowed = useRequireAdmin();
   const params = useParams<{ id: string }>();
@@ -17,6 +26,7 @@ export default function PacketPage() {
   const [provider, setProvider] = useState<Provider | null>(null);
   const [payer, setPayer] = useState<Payer | null>(null);
   const [labels, setLabels] = useState<PayerFieldLabel[]>([]);
+  const [customFields, setCustomFields] = useState<CustomFieldValueRow[]>([]);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +35,12 @@ export default function PacketPage() {
 
   const load = useCallback(async () => {
     if (!payerId) return;
-    const [providerRes, payersRes, labelsRes, submissionsRes] = await Promise.all([
+    const [providerRes, payersRes, labelsRes, submissionsRes, customFieldsRes] = await Promise.all([
       fetch(`/api/providers/${providerId}`),
       fetch("/api/payers"),
       fetch(`/api/payer-field-labels?payer_id=${payerId}`),
       fetch(`/api/submissions?provider_id=${providerId}`),
+      fetch(`/api/providers/${providerId}/custom-fields`),
     ]);
     setProvider(await providerRes.json());
     const payers: Payer[] = await payersRes.json();
@@ -37,6 +48,7 @@ export default function PacketPage() {
     setLabels(await labelsRes.json());
     const submissions = await submissionsRes.json();
     setAlreadySubmitted(submissions.some((s: { payer_id: number }) => s.payer_id === Number(payerId)));
+    setCustomFields(await customFieldsRes.json());
   }, [providerId, payerId]);
 
   useEffect(() => {
@@ -90,7 +102,36 @@ export default function PacketPage() {
     return custom || fallback;
   };
   const isIncluded = (key: string) => labels.find((l) => l.field_key === key)?.included !== 0;
-  const visibleFields = PACKET_FIELDS.filter((f) => isIncluded(f.key));
+
+  const payerCustomFields = customFields.filter((cf) => cf.payer_id === Number(payerId));
+
+  const allFields = [
+    ...PACKET_FIELDS.map((f) => ({
+      key: f.key,
+      label: f.label,
+      getValue: () => f.getValue(provider),
+      isCustom: false,
+      customSortOrder: null as number | null,
+    })),
+    ...payerCustomFields.map((cf) => ({
+      key: cf.field_key,
+      label: cf.label,
+      getValue: () => cf.value || null,
+      isCustom: true,
+      customSortOrder: cf.sort_order,
+    })),
+  ];
+
+  const visibleFields = allFields
+    .map((f, naturalIndex) => {
+      const sortOrder = f.isCustom
+        ? f.customSortOrder ?? naturalIndex
+        : labels.find((l) => l.field_key === f.key)?.sort_order ?? naturalIndex;
+      return { field: f, sortOrder, naturalIndex };
+    })
+    .filter((w) => w.field.isCustom || isIncluded(w.field.key))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.naturalIndex - b.naturalIndex)
+    .map((w) => w.field);
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,7 +164,7 @@ export default function PacketPage() {
 
         <dl className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           {visibleFields.map((f) => {
-            const value = f.key === "ssn" && revealedSsn ? revealedSsn : f.getValue(provider);
+            const value = f.key === "ssn" && revealedSsn ? revealedSsn : f.getValue();
             return (
               <div key={f.key} className="flex justify-between gap-4 border-b border-slate-100 py-1.5">
                 <dt className="text-slate-500">{labelFor(f.key, f.label)}</dt>

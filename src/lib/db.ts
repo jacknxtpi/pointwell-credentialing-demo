@@ -138,14 +138,40 @@ db.exec(`
 
   -- Lets admins rename any packet field to match a specific payer's own
   -- terminology (e.g. our "Home address" might be that payer's "Residential Addr"),
-  -- and exclude fields a given payer's form doesn't ask for at all.
+  -- exclude fields a given payer's form doesn't ask for at all, and control the
+  -- order fields print in for that payer's packet (NULL = default registry order).
   CREATE TABLE IF NOT EXISTS payer_field_labels (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     payer_id INTEGER NOT NULL REFERENCES payers(id) ON DELETE CASCADE,
     field_key TEXT NOT NULL,
     label TEXT NOT NULL DEFAULT '',
     included INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER,
     UNIQUE(payer_id, field_key)
+  );
+
+  -- Fields an admin defines that aren't backed by a real providers column --
+  -- e.g. a one-off question only one payer's form asks. Owned by exactly one
+  -- payer (not shared/toggled across payers like schema fields), so deleting
+  -- one payer's custom field never touches another payer's. Values are stored
+  -- per provider in provider_custom_field_values rather than as a providers
+  -- column, so new fields don't require a schema migration.
+  CREATE TABLE IF NOT EXISTS custom_packet_fields (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payer_id INTEGER NOT NULL REFERENCES payers(id) ON DELETE CASCADE,
+    field_key TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    included INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS provider_custom_field_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider_id INTEGER NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    custom_field_id INTEGER NOT NULL REFERENCES custom_packet_fields(id) ON DELETE CASCADE,
+    value TEXT,
+    UNIQUE(provider_id, custom_field_id)
   );
 
   -- Network status tree: Payer -> Line of Business -> Plan -> provider status.
@@ -239,6 +265,37 @@ db.exec(`
     revealed_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// CREATE TABLE IF NOT EXISTS is a no-op against an already-existing local DB
+// file, so columns added to an existing table after first creation need an
+// explicit migration here.
+const payerFieldLabelColumns = db.prepare("PRAGMA table_info(payer_field_labels)").all() as {
+  name: string;
+}[];
+if (!payerFieldLabelColumns.some((c) => c.name === "sort_order")) {
+  db.exec("ALTER TABLE payer_field_labels ADD COLUMN sort_order INTEGER");
+}
+
+// custom_packet_fields moved from a shared/global registry to one owned by a
+// single payer -- recreate it under the new shape if an old copy exists (it's
+// a brand-new, not-yet-launched feature, so there's no real data to preserve).
+const customFieldColumns = db.prepare("PRAGMA table_info(custom_packet_fields)").all() as {
+  name: string;
+}[];
+if (customFieldColumns.length > 0 && !customFieldColumns.some((c) => c.name === "payer_id")) {
+  db.exec(`
+    DROP TABLE custom_packet_fields;
+    CREATE TABLE custom_packet_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      payer_id INTEGER NOT NULL REFERENCES payers(id) ON DELETE CASCADE,
+      field_key TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      included INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
 
 export default db;
 

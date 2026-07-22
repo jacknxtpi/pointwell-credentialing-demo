@@ -24,12 +24,20 @@ export default function ProvidersPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight text-brand-navy">Providers</h1>
-        <Link
-          href="/providers/new"
-          className="rounded-lg bg-brand-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-blue-dark"
-        >
-          + Add provider
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/providers/import"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-brand-blue transition-colors hover:bg-brand-blue-light"
+          >
+            Bulk import
+          </Link>
+          <Link
+            href="/providers/new"
+            className="rounded-lg bg-brand-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-blue-dark"
+          >
+            + Add provider
+          </Link>
+        </div>
       </div>
 
       {loading ? (

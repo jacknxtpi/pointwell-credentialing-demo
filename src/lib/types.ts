@@ -118,6 +118,24 @@ export type PayerFieldLabel = {
   field_key: string;
   label: string;
   included: number;
+  sort_order: number | null;
+};
+
+export type CustomPacketField = {
+  id: number;
+  payer_id: number;
+  field_key: string;
+  label: string;
+  included: number;
+  sort_order: number | null;
+  created_at: string;
+};
+
+export type ProviderCustomFieldValue = {
+  id: number;
+  provider_id: number;
+  custom_field_id: number;
+  value: string | null;
 };
 
 export type LineOfBusiness = {

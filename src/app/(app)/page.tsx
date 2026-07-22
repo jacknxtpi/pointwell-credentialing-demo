@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import db from "@/lib/db";
 import { DOCUMENT_TYPES, getExpirationState } from "@/lib/documentTypes";
+import { getRecredentialingState } from "@/lib/recredentialing";
 
 const STALE_SUBMISSION_DAYS = 14;
 
@@ -23,6 +24,15 @@ type SubmissionAlertRow = {
   payer_name: string;
   status: string;
   submitted_at: string;
+};
+
+type RecredAlertRow = {
+  id: number;
+  provider_id: number;
+  first_name: string;
+  last_name: string;
+  payer_name: string;
+  approved_through: string | null;
 };
 
 function getDocumentAlerts() {
@@ -67,6 +77,23 @@ function getSubmissionAlerts() {
     .filter((a) => new Date(a.row.submitted_at).getTime() < cutoff);
 }
 
+function getRecredentialingAlerts() {
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.provider_id, p.first_name, p.last_name, pay.name AS payer_name, s.approved_through
+       FROM payer_submissions s
+       JOIN providers p ON p.id = s.provider_id
+       JOIN payers pay ON pay.id = s.payer_id
+       WHERE s.status = 'approved'`
+    )
+    .all() as RecredAlertRow[];
+
+  return rows
+    .map((row) => ({ row, state: getRecredentialingState("approved", row.approved_through) }))
+    .filter((a) => a.state === "overdue" || a.state === "due_soon")
+    .sort((a, b) => (a.row.approved_through ?? "").localeCompare(b.row.approved_through ?? ""));
+}
+
 const cards = [
   {
     href: "/providers/new",
@@ -108,6 +135,7 @@ export default async function Home() {
 
   const documentAlerts = getDocumentAlerts();
   const submissionAlerts = getSubmissionAlerts();
+  const recredAlerts = getRecredentialingAlerts();
 
   return (
     <div className="flex flex-col gap-8">
@@ -122,7 +150,7 @@ export default async function Home() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-medium text-brand-navy">Documents needing attention</h2>
@@ -191,6 +219,46 @@ export default async function Home() {
               ))}
               {submissionAlerts.length > 5 && (
                 <li className="text-xs text-slate-400">+{submissionAlerts.length - 5} more</li>
+              )}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium text-brand-navy">Recredentialing due</h2>
+            <Link href="/recredentialing" className="text-xs font-medium text-brand-blue hover:underline">
+              View all →
+            </Link>
+          </div>
+          {recredAlerts.length === 0 ? (
+            <p className="mt-3 text-sm text-brand-teal">Nothing overdue or due within 90 days.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {recredAlerts.slice(0, 5).map((a) => (
+                <li key={a.row.id} className="flex items-center justify-between gap-2 text-sm">
+                  <Link
+                    href={`/providers/${a.row.provider_id}`}
+                    className="text-brand-navy hover:text-brand-blue hover:underline"
+                  >
+                    {a.row.first_name} {a.row.last_name}
+                  </Link>
+                  <span className="text-right text-slate-500">
+                    {a.row.payer_name}
+                    {" · "}
+                    <span
+                      className={
+                        a.state === "overdue" ? "font-medium text-red-700" : "font-medium text-amber-700"
+                      }
+                    >
+                      {a.state === "overdue" ? "overdue" : "due soon"}
+                      {a.row.approved_through ? ` ${a.row.approved_through}` : ""}
+                    </span>
+                  </span>
+                </li>
+              ))}
+              {recredAlerts.length > 5 && (
+                <li className="text-xs text-slate-400">+{recredAlerts.length - 5} more</li>
               )}
             </ul>
           )}

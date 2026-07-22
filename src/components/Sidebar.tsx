@@ -12,6 +12,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/lookup", label: "Credential Status" },
   { href: "/network", label: "Network Status" },
   { href: "/documents", label: "Document Expirations" },
+  { href: "/recredentialing", label: "Recredentialing" },
   { href: "/payers", label: "Payers" },
 ];
 
