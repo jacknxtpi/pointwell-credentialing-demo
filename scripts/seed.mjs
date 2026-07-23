@@ -712,7 +712,12 @@ const ADMIN_EMAIL = "admin@mdhc-llc.com";
 const ADMIN_PASSWORD = "admin12345";
 insertUser.run(ADMIN_EMAIL, hashPassword(ADMIN_PASSWORD), "admin", null);
 
+const DEMO_EMAIL = "demo@nxtpi.com";
+const DEMO_PASSWORD = "demo12345";
+insertUser.run(DEMO_EMAIL, hashPassword(DEMO_PASSWORD), "admin", null);
+
 console.log(
   "Seeded payers, 2 demo providers (with locations/references/disclosures), sample submissions with approval evidence, network status tree, documents, and payer field labels."
 );
 console.log(`\nDemo admin login:\n  email: ${ADMIN_EMAIL}\n  password: ${ADMIN_PASSWORD}`);
+console.log(`\nDemo admin login:\n  email: ${DEMO_EMAIL}\n  password: ${DEMO_PASSWORD}`);
